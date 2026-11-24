@@ -67,7 +67,9 @@ local deps = {squared.gui, squared.messaging}
 local reading = library{name = "sqgui_reading", srcs = {"src/reading.cppm"}, deps = deps, flags = {"-O2"}}
 local gen = exe{name = "sqgui-gen", srcs = {"gen/sqgui-gen.cpp"}, deps = {reading}, flags = {"-O2"}}
 -- The editor: phase 2, the viewer's read commands (src/main.cpp).
-local sqgui = exe{name = "sqgui", srcs = {"src/main.cpp"}, deps = {reading}, flags = {"-O2"}}
+local viewer = library{name = "sqgui_viewer", srcs = {"src/app.cppm", "src/face.cppm"},
+                       deps = {reading, squared.tui}, flags = {"-O2"}}
+local sqgui = exe{name = "sqgui", srcs = {"src/main.cpp"}, deps = {viewer}, flags = {"-O2"}}
 
 -- The test: sqgui-gen on the fixture, then a program compiled with what it
 -- wrote, which runs sqgui-gen again on the wrong files.
@@ -87,9 +89,13 @@ local gen_test = exe{
   flags = {"-I" .. out, '-DSQGEN_PATH="' .. gen .. '"', '-DSQGEN_FIXTURE="' .. fixture .. '"'},
   default = false,
 }
-verb("test", {needs = {gen_test, sqgui, glob(fixture .. "/bad/**/*"), glob(fixture .. "/keyword/*")},
+-- The terminal face, driven through squared-tui's test bench (no terminal).
+local face_test = exe{name = "test/face_test", srcs = {"test/face_test.cpp"}, deps = {viewer},
+                      flags = {'-DFIXTURE="' .. fixture .. '"'}, default = false}
+verb("test", {needs = {gen_test, sqgui, face_test, glob(fixture .. "/bad/**/*"), glob(fixture .. "/keyword/*")},
               call = function()
                 local failed = exec{gen_test} ~= 0
+                if exec{face_test} ~= 0 then failed = true end
                 if exec{"bash", "test/viewer.sh", sqgui} ~= 0 then failed = true end
                 return failed and 1 or 0
               end})

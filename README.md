@@ -17,6 +17,7 @@ sqgui get settings 'rows[1][0].bind'
 sqgui check                   # every problem the build would stop for (exit 1)
 sqgui map                     # which layout pushes, replaces, opens or closes which
 sqgui names                   # names.json's addresses, and the layouts using each
+sqgui view                    # the terminal face: browse the layouts, drawn in cells
 ```
 
 Each answers as words or, with `--json`, as JSON. sqgui finds the files by

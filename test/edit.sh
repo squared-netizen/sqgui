@@ -54,3 +54,28 @@ printf '\n' >> "$file"
 ! s undo settings 2> "$work/err.txt" && grep -q 'changed since' "$work/err.txt" ||
     die "undo: a file changed by hand"
 ok "undo: refuses a file changed since sqgui's edit"
+
+# 0.4: insert, remove, move: lists' elements, each list's own separator.
+cp "$work/original.json" "$file"
+s insert settings 'rows[0][1]' '{"type": "label", "text": "Hi"}' > /dev/null
+changed | grep -q '"bind": "settings.sound" }, {"type": "label", "text": "Hi"} ],' ||
+    die "insert: at a row's end, after a comma: $(changed)"
+s insert settings 'rows[1]' '[ { "type": "label", "text": "Row" } ]' > /dev/null
+grep -q '^    \[ { "type": "label", "text": "Row" } \],$' "$file" ||
+    die "insert: a row, on a line of its own, indented as its neighbours: $(changed)"
+s move settings 'rows[1]' 'rows[0]' > /dev/null
+[ "$(s get settings 'rows[0][0].text')" = Row ] || die "move: a row to the top"
+s remove settings 'rows[0]' > /dev/null
+s remove settings 'rows[0][1]' > /dev/null
+cmp -s "$work/original.json" "$file" || die "remove: back to the original's bytes: $(changed)"
+ok "insert, move and remove: rows and widgets, each list's separator kept"
+
+s move settings 'rows[3][0].rows[0][1]' 'rows[3][0].rows[0][0]' > /dev/null
+[ "$(s get settings 'rows[3][0].rows[0][0].text')" = Loud ] &&
+    [ "$(s get settings 'rows[3][0].rows[0][1].text')" = Mute ] || die "move: within a nested table's row"
+grep -q '^        \[ { "type": "button", "text": "Loud", "tap": "set settings.volume 11.0" },$' "$file" ||
+    die "move: the row's newline and indent kept: $(changed)"
+! s move settings 'rows[3]' 'rows[3][0].rows[0]' 2> /dev/null || die "move: into itself"
+! s insert settings 'rows[9]' '[]' 2> /dev/null || die "insert: past the end"
+! s remove settings 'rows[1][0].max' 2> /dev/null || die "remove: a key (unset's)"
+ok "move within a nested row; into itself, past the end and a key refused"

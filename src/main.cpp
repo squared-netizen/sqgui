@@ -1,19 +1,21 @@
 // sqgui: the squared SDK's UI editor. It reads an app's layouts and
 // names.json and says what they hold, as words or as JSON (--json) (phase 2,
-// the viewer), and changes one value at a time, keeping every other byte of
-// the file (phase 3).
+// the viewer), and changes one thing at a time, keeping every other byte of
+// the file (phase 3: set, unset, undo; 0.4: insert, remove, move).
 //
-//   sqgui list                       every layout: its kind, its nodes, whether
-//   it checks sqgui show LAYOUT                its nodes as an outline, each
-//   with its path sqgui get LAYOUT PATH            one value: sqgui get
-//   settings rows[1][0].bind sqgui check                      every problem the
-//   build would stop for (exit 1) sqgui map                        which layout
-//   pushes, replaces, opens or closes which sqgui names names.json's addresses,
-//   and the layouts using each sqgui view                       the terminal
-//   face: the layouts in character cells sqgui set LAYOUT PATH VALUE change a
-//   value, or add a key: sqgui set settings rows[1][0].max 20 sqgui unset
-//   LAYOUT PATH          remove a key sqgui undo LAYOUT                the file
-//   as it was before sqgui's last edit
+//   sqgui list                       every layout: its kind, its nodes, whether it checks
+//   sqgui show LAYOUT                its nodes as an outline, each with its path
+//   sqgui get LAYOUT PATH            one value: sqgui get settings rows[1][0].bind
+//   sqgui check                      every problem the build would stop for (exit 1)
+//   sqgui map                        which layout pushes, replaces, opens or closes which
+//   sqgui names                      names.json's addresses, and the layouts using each
+//   sqgui view                       the terminal face: the layouts in character cells
+//   sqgui set LAYOUT PATH VALUE      change a value, or add a key: sqgui set settings rows[1][0].max 20
+//   sqgui unset LAYOUT PATH          remove a key
+//   sqgui insert LAYOUT PATH VALUE   put a widget or row into a list, at PATH's index
+//   sqgui remove LAYOUT PATH         take a widget or row out of its list
+//   sqgui move LAYOUT FROM TO        the widget or row at FROM, to be at TO
+//   sqgui undo LAYOUT                the file as it was before sqgui's last edit
 //
 //   --app DIR      the app's folder: DIR/names.json and DIR/layouts/
 //   --names FILE   names.json, and --layouts DIR the layout folder, one by one
@@ -58,6 +60,10 @@ int usage(std::FILE *out = stderr, int status = 2) {
       "  set LAYOUT PATH VALUE   change one value, or add a key (VALUE: JSON, "
       "else text)\n"
       "  unset LAYOUT PATH   remove a key\n"
+      "  insert LAYOUT PATH VALUE   put a widget or row into a list: before\n"
+      "                      PATH's index, or at the end (index = length)\n"
+      "  remove LAYOUT PATH  take a widget or row out of its list\n"
+      "  move LAYOUT FROM TO the widget or row at FROM, to be at TO\n"
       "  undo LAYOUT         put back the file as it was before sqgui's last "
       "edit\n"
       "  --force             save an edit the build would stop for\n"
@@ -557,6 +563,74 @@ int unset(const App &app, std::string_view name, std::string_view path,
                    std::format("{} removed", path), force, as_json);
 }
 
+/// One edit to a layout's file: `change` turns its text into the new text.
+int edit_layout(const App &app, std::string_view name, std::string_view what,
+                bool force, bool as_json,
+                const std::function<std::expected<std::string, std::string>(
+                    std::string_view)> &change) {
+  const auto file = layout_file(app, name);
+  if (!file) {
+    return 1;
+  }
+  const auto before = read_text(*file);
+  if (!before) {
+    std::println(stderr, "sqgui: {} could not be read", file->string());
+    return 1;
+  }
+  const auto after = change(*before);
+  if (!after) {
+    std::println(stderr, "sqgui: {}.json: {}", name, after.error());
+    return 1;
+  }
+  return save_edit(app, name, *file, *before, *after, what, force, as_json);
+}
+
+/// PATH as steps, or nothing (said).
+[[nodiscard]] std::optional<std::vector<sqgui::Step>>
+path_of(std::string_view path) {
+  auto steps = sqgui::parse_path(path);
+  if (!steps) {
+    std::println(stderr, "sqgui: {} is not a path (rows[1][0])", path);
+  }
+  return steps;
+}
+
+int insert(const App &app, std::string_view name, std::string_view path,
+           std::string_view typed, bool force, bool as_json) {
+  const auto steps = path_of(path);
+  if (!steps) {
+    return 2;
+  }
+  const std::string value = value_json(typed);
+  return edit_layout(app, name, std::format("{} inserted", path), force,
+                     as_json, [&](std::string_view text) {
+                       return sqgui::insert_value(text, *steps, value);
+                     });
+}
+
+int remove(const App &app, std::string_view name, std::string_view path,
+           bool force, bool as_json) {
+  const auto steps = path_of(path);
+  if (!steps) {
+    return 2;
+  }
+  return edit_layout(
+      app, name, std::format("{} removed", path), force, as_json,
+      [&](std::string_view text) { return sqgui::remove_value(text, *steps); });
+}
+
+int move(const App &app, std::string_view name, std::string_view from,
+         std::string_view to, bool force, bool as_json) {
+  const auto a = path_of(from);
+  const auto b = path_of(to);
+  if (!a || !b) {
+    return 2;
+  }
+  return edit_layout(
+      app, name, std::format("{} moved to {}", from, to), force, as_json,
+      [&](std::string_view text) { return sqgui::move_value(text, *a, *b); });
+}
+
 int undo(const App &app, std::string_view name, bool as_json) {
   const auto file = layout_file(app, name);
   if (!file) {
@@ -641,14 +715,16 @@ int main(int argc, char **argv) {
     return usage();
   }
   const std::string_view command = words[0];
-  const std::size_t want = command == "show" || command == "undo"   ? 2
-                           : command == "get" || command == "unset" ? 3
-                           : command == "set"                       ? 4
-                                                                    : 1;
+  const std::size_t want =
+      command == "show" || command == "undo"                          ? 2
+      : command == "get" || command == "unset" || command == "remove" ? 3
+      : command == "set" || command == "insert" || command == "move"  ? 4
+                                                                      : 1;
   if (command != "list" && command != "show" && command != "get" &&
       command != "check" && command != "map" && command != "names" &&
       command != "view" && command != "set" && command != "unset" &&
-      command != "undo") {
+      command != "undo" && command != "insert" && command != "remove" &&
+      command != "move") {
     std::println(stderr, "sqgui: no command {} (sqgui --help)", command);
     return 2;
   }
@@ -710,6 +786,15 @@ int main(int argc, char **argv) {
   }
   if (command == "unset") {
     return unset(app, words[1], words[2], force, as_json);
+  }
+  if (command == "insert") {
+    return insert(app, words[1], words[2], words[3], force, as_json);
+  }
+  if (command == "remove") {
+    return remove(app, words[1], words[2], force, as_json);
+  }
+  if (command == "move") {
+    return move(app, words[1], words[2], words[3], force, as_json);
   }
   if (command == "undo") {
     return undo(app, words[1], as_json);

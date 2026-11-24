@@ -4,7 +4,8 @@
 --                          build/sqgui: the editor (phase 2: the viewer)
 --   sqmake test            build/test/gen_test: sqgui-gen on test/gen/, and
 --                          a program compiled with what it wrote; and
---                          test/viewer.sh: sqgui's read commands on test/gen/
+--                          test/viewer.sh: sqgui's read commands on test/gen/;
+--                          test/edit.sh: set, unset and undo on a copy of it
 --
 -- tools/gate.sh SQGEN SQGUI_GEN DIR... runs both on each app folder's
 -- names.json and layouts/ and compares what they write, byte for byte
@@ -67,7 +68,7 @@ local deps = {squared.gui, squared.messaging}
 local reading = library{name = "sqgui_reading", srcs = {"src/reading.cppm"}, deps = deps, flags = {"-O2"}}
 local gen = exe{name = "sqgui-gen", srcs = {"gen/sqgui-gen.cpp"}, deps = {reading}, flags = {"-O2"}}
 -- The editor: phase 2, the viewer's read commands (src/main.cpp).
-local viewer = library{name = "sqgui_viewer", srcs = {"src/app.cppm", "src/face.cppm"},
+local viewer = library{name = "sqgui_viewer", srcs = {"src/app.cppm", "src/face.cppm", "src/edit.cppm"},
                        deps = {reading, squared.tui}, flags = {"-O2"}}
 local sqgui = exe{name = "sqgui", srcs = {"src/main.cpp"}, deps = {viewer}, flags = {"-O2"}}
 
@@ -97,6 +98,7 @@ verb("test", {needs = {gen_test, sqgui, face_test, glob(fixture .. "/bad/**/*"),
                 local failed = exec{gen_test} ~= 0
                 if exec{face_test} ~= 0 then failed = true end
                 if exec{"bash", "test/viewer.sh", sqgui} ~= 0 then failed = true end
+                if exec{"bash", "test/edit.sh", sqgui} ~= 0 then failed = true end
                 return failed and 1 or 0
               end})
 

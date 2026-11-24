@@ -14,7 +14,8 @@
 -- <version>/squared, the newest: pkg install squared).
 --
 -- The toolchain: the SDK's (squared's build/toolchain.lua) where its sysroot
--- is installed (sqterm: pkg install sysroot runtimes llvm), else sqmake's
+-- is installed (sqterm: pkg install sysroot runtimes llvm) or $SQ_SYSROOT
+-- names one (sqterm's package build, for Android), else sqmake's
 -- own, $CXX with libc++ and `import std` (CI: CXX="clang++-23 -stdlib=libc++").
 --
 -- sqgui-gen is squared's gui and messaging modules for the layout reader and
@@ -51,7 +52,8 @@ if not sq or sq == "" then
 end
 
 local prefix = os.getenv("PREFIX")
-if prefix and #glob(prefix .. "/share/sysroot/usr/include/stdio.h") > 0 then
+local sysroot = os.getenv("SQ_SYSROOT")
+if (sysroot and sysroot ~= "") or (prefix and #glob(prefix .. "/share/sysroot/usr/include/stdio.h") > 0) then
   toolchain.sdk(sq .. "/build/toolchain.lua")
 end
 squared_settings = {root = sq, platform = "host", graphics = "null"}

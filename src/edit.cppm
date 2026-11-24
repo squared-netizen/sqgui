@@ -6,8 +6,11 @@
 // needs where. So this reads the file's text as JSON only far enough to find
 // the bytes of one value by its path (rows[1][0].text, the path sqgui show
 // prints), and an edit replaces exactly those bytes, adds a key just after an
-// object's last member, or removes one member and its comma. What it writes
-// is checked by the caller with the build's checker (sqgui.reading).
+// object's last member, or removes one member and its comma; in a list (a
+// table's rows, a row's widgets), puts an element in, takes one out, or moves
+// one, with the separator the list already uses (", ", or a newline and an
+// indent). What it writes is checked by the caller with the build's checker
+// (sqgui.reading).
 
 export module sqgui.edit;
 
@@ -44,6 +47,25 @@ set_value(std::string_view text, const std::vector<Step> &path,
 /// `text` without the member at `path` (an object's key), its comma too.
 [[nodiscard]] std::expected<std::string, std::string>
 unset_value(std::string_view text, const std::vector<Step> &path);
+
+/// `text` with `value` (JSON text) put into the list at `path`, which ends
+/// with an index: before the element there, or after the last when the index
+/// is the list's length. The list's own separator is used (", " or a newline
+/// and its indent), so a row added to a table looks like its neighbours.
+[[nodiscard]] std::expected<std::string, std::string>
+insert_value(std::string_view text, const std::vector<Step> &path,
+             std::string_view value);
+
+/// `text` without the list's element at `path`, and one separator.
+[[nodiscard]] std::expected<std::string, std::string>
+remove_value(std::string_view text, const std::vector<Step> &path);
+
+/// `text` with the element at `from` moved so that it is at `to` afterwards
+/// (`to` read as the file is once the element is taken out): rows[0][2] to
+/// rows[0][0] puts it first; rows[0][2] to rows[3][1] into another row.
+[[nodiscard]] std::expected<std::string, std::string>
+move_value(std::string_view text, const std::vector<Step> &from,
+           const std::vector<Step> &to);
 
 /// A JSON string literal of `s`, escaped.
 [[nodiscard]] std::string json_string(std::string_view s);
@@ -375,6 +397,141 @@ unset_value(std::string_view text, const std::vector<Step> &path) {
     to = it->value.end;
   }
   return std::string(text.substr(0, from)) + std::string(text.substr(to));
+}
+
+namespace {
+
+/// The list holding the element `path` ends with: its span and elements.
+struct List {
+  Span span;
+  std::vector<Span> elements;
+};
+
+[[nodiscard]] std::expected<List, std::string>
+list_of(std::string_view text, const std::vector<Step> &path) {
+  if (path.empty() || !path.back().index) {
+    return std::unexpected(
+        std::format("{}: a list's element (rows[1][0]), not a key",
+                    where(path, path.size())));
+  }
+  const auto parent = parent_of(text, path);
+  if (!parent) {
+    return std::unexpected(parent.error());
+  }
+  if (text[parent->begin] != '[') {
+    return std::unexpected(
+        std::format("{}: not a list", where(path, path.size() - 1)));
+  }
+  auto elements = elements_of(text, parent->begin);
+  if (!elements) {
+    return std::unexpected("the file is not JSON");
+  }
+  return List{*parent, std::move(*elements)};
+}
+
+/// What stands between a list's elements: its first gap, else `otherwise`.
+[[nodiscard]] std::string separator_of(std::string_view text, const List &list,
+                                       std::string_view otherwise = ", ") {
+  if (list.elements.size() >= 2) {
+    return std::string(text.substr(
+        list.elements[0].end, list.elements[1].begin - list.elements[0].end));
+  }
+  return std::string(otherwise);
+}
+
+/// insert_value, with `otherwise` the separator for a list of one or none.
+std::expected<std::string, std::string>
+insert_with(std::string_view text, const std::vector<Step> &path,
+            std::string_view value, std::string_view otherwise) {
+  const auto list = list_of(text, path);
+  if (!list) {
+    return std::unexpected(list.error());
+  }
+  const std::size_t at = *path.back().index;
+  const std::size_t n = list->elements.size();
+  if (at > n) {
+    return std::unexpected(
+        std::format("{}: the list has {} (insert at 0 to {})",
+                    where(path, path.size() - 1), n, n));
+  }
+  const std::string sep = separator_of(text, *list, otherwise);
+  std::string out;
+  if (n == 0) {
+    const std::size_t inside = list->span.begin + 1;
+    out = std::string(text.substr(0, inside)) + std::string(value) +
+          std::string(text.substr(inside));
+  } else if (at == n) {
+    const std::size_t after = list->elements.back().end;
+    out = std::string(text.substr(0, after)) + sep + std::string(value) +
+          std::string(text.substr(after));
+  } else {
+    const std::size_t before = list->elements[at].begin;
+    out = std::string(text.substr(0, before)) + std::string(value) + sep +
+          std::string(text.substr(before));
+  }
+  return out;
+}
+
+} // namespace
+
+std::expected<std::string, std::string>
+insert_value(std::string_view text, const std::vector<Step> &path,
+             std::string_view value) {
+  return insert_with(text, path, value, ", ");
+}
+
+std::expected<std::string, std::string>
+remove_value(std::string_view text, const std::vector<Step> &path) {
+  const auto list = list_of(text, path);
+  if (!list) {
+    return std::unexpected(list.error());
+  }
+  const std::size_t at = *path.back().index;
+  const auto &e = list->elements;
+  if (at >= e.size()) {
+    return std::unexpected(
+        std::format("{}: no [{}] there", where(path, path.size() - 1), at));
+  }
+  std::size_t from = 0, to = 0;
+  if (e.size() == 1) {
+    from = e[0].begin;
+    to = e[0].end;
+  } else if (at > 0) {
+    from = e[at - 1].end; // its separator goes with it
+    to = e[at].end;
+  } else {
+    from = e[0].begin;
+    to = e[1].begin;
+  }
+  return std::string(text.substr(0, from)) + std::string(text.substr(to));
+}
+
+std::expected<std::string, std::string>
+move_value(std::string_view text, const std::vector<Step> &from,
+           const std::vector<Step> &to) {
+  if (to.size() >= from.size() &&
+      std::equal(from.begin(), from.end(), to.begin(),
+                 [](const Step &a, const Step &b) {
+                   return a.key == b.key && a.index == b.index;
+                 })) {
+    return std::unexpected("an element cannot move into itself");
+  }
+  const auto found = find_value(text, from);
+  if (!found) {
+    return std::unexpected(found.error());
+  }
+  const std::string moving(
+      text.substr(found->begin, found->end - found->begin));
+  // The separator of the list it leaves, for a list left with one element
+  // (a two-widget row on two lines, reordered).
+  const auto source = list_of(text, from);
+  const std::string sep =
+      source ? separator_of(text, *source) : std::string(", ");
+  const auto without = remove_value(text, from);
+  if (!without) {
+    return std::unexpected(without.error());
+  }
+  return insert_with(*without, to, moving, sep);
 }
 
 std::string json_string(std::string_view s) {

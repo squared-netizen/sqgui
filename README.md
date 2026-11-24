@@ -5,7 +5,19 @@ it edits a squared app's screens and panes by reading and writing the files
 the build already compiles, `sq_app/layouts/<name>.json` and
 `sq_app/names.json`.
 
-**Status: designed, not yet built.**
+**Status: phase 1 built** (2026-11-24): `sqgui-gen`, the headless layout
+compiler (sqgen, moved here from squared), byte for byte what sqgen writes.
+The editor comes next: the read commands and the terminal face, then the
+window.
+
+```sh
+sqmake           # build/sqgui-gen (squared: $SQUARED, ./squared, or the SDK's)
+sqmake test      # sqgui-gen on test/gen/, and a program built with what it wrote
+sqgui-gen --names sq_app/names.json --layouts sq_app/layouts --out build/gen
+```
+
+`tools/gate.sh SQGEN SQGUI_GEN DIR...` compares the two on app folders, byte
+for byte (phase 1's gate; CI runs it on squared-examples).
 
 ## What it will be
 

@@ -59,7 +59,12 @@ using sq::messaging::Verb;
             std::exit( 1 );
         }
     }
-    fs::rename( part, path );
+    std::error_code error;
+    fs::rename( part, path, error );
+    if( error ) {
+        std::fprintf( stderr, "sqgen: could not write %s: %s\n", path.c_str(), error.message().c_str() );
+        std::exit( 1 );
+    }
     return true;
 }
 
@@ -487,7 +492,13 @@ int main( int argc, char **argv )
         return 1;
     }
 
-    fs::create_directories( given->out );
+    // A folder that cannot be made (no /tmp on Android, say) is said, not thrown.
+    std::error_code made;
+    fs::create_directories( given->out, made );
+    if( made ) {
+        std::fprintf( stderr, "sqgen: could not make %s: %s\n", given->out.c_str(), made.message().c_str() );
+        return 1;
+    }
     const fs::path out( given->out );
     std::string names_from = "no names.json";
     if( !given->names.empty() ) {

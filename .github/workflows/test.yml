@@ -1,0 +1,54 @@
+# Builds sqgui-gen with sqmake, clang and libc++ 23 (the SDK's toolchain,
+# from apt.llvm.org), against squared at SQUARED_VERSION; runs sqmake test;
+# and the phase 1 gate: sqgui-gen against squared's own sqgen, byte for byte,
+# on squared-examples' apps and the test fixtures.
+name: test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: clang and libc++ 23
+        run: |
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-23 main" | sudo tee /etc/apt/sources.list.d/llvm-23.list
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends clang-23 lld-23 llvm-23 libc++-23-dev libc++abi-23-dev
+          echo "/usr/lib/llvm-23/bin" >> "$GITHUB_PATH"
+      - name: sqmake, squared and squared-examples
+        run: |
+          git clone -q --depth 1 --branch v0.10.0 https://github.com/squared-netizen/sqmake "$RUNNER_TEMP/sqmake"
+          make -C "$RUNNER_TEMP/sqmake" -j4 CXX=clang++ CC=clang build/sqmake
+          git clone -q https://github.com/squared-netizen/squared "$RUNNER_TEMP/squared"
+          git -C "$RUNNER_TEMP/squared" checkout -q "$(cat SQUARED_VERSION)"
+          git clone -q --depth 1 https://github.com/squared-netizen/squared-examples "$RUNNER_TEMP/examples"
+          echo "SQUARED=$RUNNER_TEMP/squared/packages/package.squared-core/tree/squared" >> "$GITHUB_ENV"
+          echo "SQMAKE=$RUNNER_TEMP/sqmake/build/sqmake" >> "$GITHUB_ENV"
+      - name: build and test
+        env:
+          CXX: clang++ -stdlib=libc++
+          CC: clang
+        run: |
+          "$SQMAKE" -j4
+          "$SQMAKE" -j4 test
+      - name: the gate (sqgui-gen against sqgen)
+        env:
+          CXX: clang++ -stdlib=libc++
+          CC: clang
+        run: |
+          "$SQMAKE" -j4 build/reference/sqgen
+          apps=()
+          for d in "$RUNNER_TEMP"/examples/*/sq_app; do
+            if [ -f "$d/names.json" ] || [ -d "$d/layouts" ]; then apps+=("$d"); fi
+          done
+          tools/gate.sh build/reference/sqgen build/sqgui-gen "${apps[@]}" test/gen test/gen/bad test/gen/keyword

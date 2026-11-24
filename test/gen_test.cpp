@@ -200,6 +200,12 @@ void runs_again()
     CHECK( !fs::exists( home / "out" ) );
 
     CHECK( run( "--layouts x", printed ) == 2 ); // no --out
+
+    // An --out that cannot be made: said, exit 1, no exception.
+    const std::string blocked = ( home / "file" ).string();
+    std::ofstream( blocked ) << "a file, not a folder";
+    CHECK( run( "--names " + ( fixture / "names.json" ).string() + " --out " + blocked + "/gen", printed ) == 1 );
+    CHECK( printed.find( "could not make" ) != std::string::npos );
     fs::remove_all( home );
 }
 

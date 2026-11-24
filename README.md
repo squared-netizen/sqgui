@@ -7,8 +7,23 @@ the build already compiles, `sq_app/layouts/<name>.json` and
 
 **Status: phase 1 built** (2026-11-24): `sqgui-gen`, the headless layout
 compiler (sqgen, moved here from squared), byte for byte what sqgen writes.
-The editor comes next: the read commands and the terminal face, then the
-window.
+Phase 2, the viewer, has begun: `sqgui`'s read commands, which write
+nothing:
+
+```sh
+sqgui list                    # every layout: its kind, its nodes, whether it checks
+sqgui show settings           # its nodes as an outline, each with its path
+sqgui get settings 'rows[1][0].bind'
+sqgui check                   # every problem the build would stop for (exit 1)
+sqgui map                     # which layout pushes, replaces, opens or closes which
+sqgui names                   # names.json's addresses, and the layouts using each
+```
+
+Each answers as words or, with `--json`, as JSON. sqgui finds the files by
+asking square (`square --json info`: the workspace's app and layouts), or
+`--app DIR` says. sqgui-gen and sqgui read through one module
+(`src/reading.cppm`), so `sqgui check` says what the build would, word for
+word. The terminal face and then the window come next.
 
 ```sh
 sqmake           # build/sqgui-gen (squared: $SQUARED, ./squared, or the SDK's)

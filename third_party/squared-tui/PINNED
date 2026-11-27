@@ -1,0 +1,21 @@
+# squared-tui (sq.tui), copied by tools/vendor_squared_tui.sh from squared's
+# packages/package.squared-tui. Do not edit: change it in squared, then copy it again.
+from: squared bf12c8411b3c50ca7837a3a386fda987760a4460
+copied: 2026-11-27
+dc4cb4a90a238dceabe79d7ef7c88e366839f1d464e98cd3daa19d4ef153405c  ./event.cppm
+2d278acccb2b55d3653c618666afcf42ac94f570036f015a25825ba8e5eb174a  ./input_decoder.cppm
+d8ebbdcad280bf6af18e781a651ebd4c023aee5ad6067b6b7acdf5de62d38fe7  ./key.cppm
+18d1cc1b57fe204b1b3ab8f2e36894fb5c7f67aaab1dfe7b203d85b56b835acc  ./module.cppm
+b44051fd0533c7b05652b0b66ba87fcb83cd9606564ec0c59f018c15e4a2813d  ./rect.cppm
+448422fda176d11b47f6c3468f4f52eb536ef4928fa3d6c7f9f133c0136c6f67  ./renderer.cppm
+7ceb83e11ed7f7398f8cd71c95b095c2ab5f78d289dc1eb3a5ec394c4e3fe394  ./screen.cppm
+170a5a2873a5a158e53030ab1f04fe7b938c2ca1a6150092e5f13c3d9990c940  ./simple.cppm
+23fb0b7f611299387613b486f77089a3cf759ecc43629ebc43ea67e2d90a5393  ./src/input_decoder.cpp
+683d475d5cb46417e557dab6dc90c9aefd0ef2087e780ac9402f56953476b5d6  ./src/renderer.cpp
+9d695f01a1a4eac0d9c23b29f423197575b3aa934eff6020a310452cc636dfd8  ./src/screen.cpp
+e6e6a5dbef1e267bf3649443a00259a79a622d24078c38a9e55d8ff93cb79f4a  ./src/simple.cpp
+9d9ab6741ec767f0f02b699455aa45c6416d64af18c91ee81786cce6e75e5ecc  ./src/terminal.cpp
+15706864c06f6fcb3e72927393c188223f6c805388d23f8fd51a9616d012b48f  ./src/test_bench.cpp
+d980ce1dd9ccfd8bd9324fbb270f042ef4d398b9b1cc0d7a4f74f709c9eeabf1  ./style.cppm
+921036ca0fe57b8f3a74e5e0f26e9c7a791f3a290b05fe22ea080315ff135642  ./terminal.cppm
+d127ba4b8ad58fc347c8f9fc186627d1b3a750daca5dc2a45fe8f7eb9220cc4c  ./test_bench.cppm

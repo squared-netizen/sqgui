@@ -63,13 +63,25 @@ squared_settings = {root = sq, platform = "host", graphics = "null"}
 local squared = include(sq .. "/build/squared.lua")
 local deps = {squared.gui, squared.messaging}
 
+-- sq.tui, for the terminal face: squared-core's own up to 1.2, a package of
+-- its own since 1.3 (package.squared-tui), whose copy sqgui carries
+-- (third_party/squared-tui: tools/vendor_squared_tui.sh), built as
+-- squared's own modules are, on its sq.term and sq.keys.
+local tui = squared.tui
+if not tui then
+  if not squared.add_module then
+    error("build.lua: " .. sq .. " has neither sq.tui nor add_module: squared-core 1.3.0 or later", 0)
+  end
+  tui = squared.add_module("tui", "third_party/squared-tui", {"term", "keys"})
+end
+
 -- The reader both share (src/reading.cppm, module sqgui.reading): the
 -- editor's problems are the build's, word for word.
 local reading = library{name = "sqgui_reading", srcs = {"src/reading.cppm"}, deps = deps, flags = {"-O2"}}
 local gen = exe{name = "sqgui-gen", srcs = {"gen/sqgui-gen.cpp"}, deps = {reading}, flags = {"-O2"}}
 -- The editor: phase 2, the viewer's read commands (src/main.cpp).
 local viewer = library{name = "sqgui_viewer", srcs = {"src/app.cppm", "src/face.cppm", "src/edit.cppm"},
-                       deps = {reading, squared.tui}, flags = {"-O2"}}
+                       deps = {reading, tui}, flags = {"-O2"}}
 local sqgui = exe{name = "sqgui", srcs = {"src/main.cpp"}, deps = {viewer}, flags = {"-O2"}}
 
 -- The test: sqgui-gen on the fixture, then a program compiled with what it
@@ -102,10 +114,12 @@ verb("test", {needs = {gen_test, sqgui, face_test, glob(fixture .. "/bad/**/*"),
                 return failed and 1 or 0
               end})
 
--- The reference for the gate: squared's own sqgen, built the same way,
--- while squared still carries it (squared/tools/sqgen; `sqmake
--- build/reference/sqgen`).
-local reference = sq .. "/tools/sqgen/sqgen.cpp"
+-- The reference for the gate: squared's own sqgen, built the same way
+-- (`sqmake build/reference/sqgen`): $SQGEN_REFERENCE, its last source (squared
+-- dropped it when sqgen came here, caffab3: CI takes it from the commit
+-- before), else squared's while an older one still carries it.
+local reference = os.getenv("SQGEN_REFERENCE")
+if not reference or reference == "" then reference = sq .. "/tools/sqgen/sqgen.cpp" end
 if #glob(reference) > 0 then
   exe{name = "reference/sqgen", srcs = {reference}, deps = deps, flags = {"-O2"}, default = false}
 end

@@ -35,6 +35,11 @@ jobs:
           git clone -q --depth 1 https://github.com/squared-netizen/squared-examples "$RUNNER_TEMP/examples"
           echo "SQUARED=$RUNNER_TEMP/squared/packages/package.squared-core/tree/squared" >> "$GITHUB_ENV"
           echo "SQMAKE=$RUNNER_TEMP/sqmake/build/sqmake" >> "$GITHUB_ENV"
+          # The gate's reference: squared's last sqgen, from the commit before
+          # caffab3 (where it came to sqgui as sqgui-gen).
+          git -C "$RUNNER_TEMP/squared" show caffab3^:packages/package.squared-core/tree/squared/tools/sqgen/sqgen.cpp \
+            > "$RUNNER_TEMP/sqgen.cpp"
+          echo "SQGEN_REFERENCE=$RUNNER_TEMP/sqgen.cpp" >> "$GITHUB_ENV"
       - name: build and test
         env:
           CXX: clang++ -stdlib=libc++

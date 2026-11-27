@@ -114,10 +114,12 @@ verb("test", {needs = {gen_test, sqgui, face_test, glob(fixture .. "/bad/**/*"),
                 return failed and 1 or 0
               end})
 
--- The reference for the gate: squared's own sqgen, built the same way,
--- while squared still carries it (squared/tools/sqgen; `sqmake
--- build/reference/sqgen`).
-local reference = sq .. "/tools/sqgen/sqgen.cpp"
+-- The reference for the gate: squared's own sqgen, built the same way
+-- (`sqmake build/reference/sqgen`): $SQGEN_REFERENCE, its last source (squared
+-- dropped it when sqgen came here, caffab3: CI takes it from the commit
+-- before), else squared's while an older one still carries it.
+local reference = os.getenv("SQGEN_REFERENCE")
+if not reference or reference == "" then reference = sq .. "/tools/sqgen/sqgen.cpp" end
 if #glob(reference) > 0 then
   exe{name = "reference/sqgen", srcs = {reference}, deps = deps, flags = {"-O2"}, default = false}
 end
